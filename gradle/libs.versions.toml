@@ -6,6 +6,7 @@ kotlin = "2.3.21"
 ksp = "2.3.9"
 
 # AndroidX Core
+appfunctions = "1.0.0-alpha08"
 coreKtx = "1.19.0"
 coreSplashscreen = "1.2.0"
 activityCompose = "1.13.0"
@@ -58,6 +59,9 @@ espressoCore = "3.7.0"
 
 
 [libraries]
+appfunctions = { group = "androidx.appfunctions", name = "appfunctions", version.ref = "appfunctions" }
+appfunctions-service = { group = "androidx.appfunctions", name = "appfunctions-service", version.ref = "appfunctions" }
+appfunctions-compiler = { group = "androidx.appfunctions", name = "appfunctions-compiler", version.ref = "appfunctions" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 bom = { module = "io.github.Rosemoe.sora-editor:bom", version.ref = "bom" }

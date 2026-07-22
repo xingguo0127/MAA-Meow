@@ -52,7 +52,7 @@ android {
 
     defaultConfig {
         applicationId = "com.aliothmoon.maameow"
-        minSdk = 28
+        minSdk = 33
         targetSdk = 36
         versionCode = gitVersionCode
         versionName = gitVersionName
@@ -140,11 +140,26 @@ android {
                 "META-INF/LICENSE.md",
                 "META-INF/NOTICE.md"
             )
+            // appfunctions-compiler 生成的 generated/ksp/<variant>/resources/assets/{app_functions.xml,app_functions_v2.xml}
+            // 会被 Kotlin 的 java resources 流水线(processDebugJavaRes)自动拾取一份、
+            // 又被上面 sourceSets.assets.srcDir 的显式登记再拾取一份 → packageDebug 撞名冲突(cannot overwrite)。
+            // 只保留显式 assets 登记这一份(真正的 Android assets 语义)，排除 java resources 里的重复项。
+            excludes += setOf(
+                "assets/app_functions.xml",
+                "assets/app_functions_v2.xml"
+            )
         }
     }
 
     androidResources {
         localeFilters += listOf("zh", "en")
+    }
+
+    // KSP 生成的 app_functions.xml(系统索引数据源)默认不并入 android assets → 双变体显式登记
+    listOf("debug", "release").forEach { v ->
+        sourceSets.getByName(v).assets.srcDir(
+            "${layout.buildDirectory.get().asFile}/generated/ksp/$v/resources/assets"
+        )
     }
 
     lint {
@@ -162,10 +177,27 @@ kotlin {
     }
 }
 
+// AppFunction 注解处理:聚合本模块 @AppFunction 生成元数据/服务
+ksp {
+    arg("appfunctions:aggregateAppFunctions", "true")
+}
+
+// mergeDebugAssets 必须在 kspDebugKotlin(生成 app_functions.xml)之后跑
+afterEvaluate {
+    listOf("Debug", "Release").forEach { v ->
+        tasks.findByName("merge${v}Assets")?.dependsOn("ksp${v}Kotlin")
+    }
+}
+
 dependencies {
     compileOnly(project(":hidden-api"))
     implementation(project(":annotation-api"))
     ksp(project(":ksp-processor"))
+
+    // AppFunction 提供侧
+    implementation(libs.appfunctions)
+    implementation(libs.appfunctions.service)
+    ksp(libs.appfunctions.compiler)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
