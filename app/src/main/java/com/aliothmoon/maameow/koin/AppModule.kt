@@ -26,6 +26,7 @@ import com.aliothmoon.maameow.data.notification.provider.QmsgProvider
 import com.aliothmoon.maameow.data.notification.provider.ServerChanProvider
 import com.aliothmoon.maameow.data.notification.provider.SmtpProvider
 import com.aliothmoon.maameow.data.notification.provider.TelegramProvider
+import com.aliothmoon.maameow.appfunctions.MaaFunctions
 import com.aliothmoon.maameow.data.preferences.AppSettingsManager
 import com.aliothmoon.maameow.data.preferences.ConfigBackupManager
 import com.aliothmoon.maameow.data.preferences.TaskChainState
@@ -186,4 +187,7 @@ val appModule = module {
 
     // 前台模式自动任务
     singleOf(::ForegroundScheduleStarter)
+
+    // FlowOS App Functions（fork 专属）
+    singleOf(::MaaFunctions)
 }

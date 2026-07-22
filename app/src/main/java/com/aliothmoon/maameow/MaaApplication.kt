@@ -1,6 +1,8 @@
 package com.aliothmoon.maameow
 
 import android.app.Application
+import androidx.appfunctions.service.AppFunctionConfiguration
+import com.aliothmoon.maameow.appfunctions.MaaFunctions
 import com.aliothmoon.maameow.data.datasource.AppDownloader
 import com.aliothmoon.maameow.data.preferences.AppSettingsManager
 import com.aliothmoon.maameow.domain.service.GameMuteCoordinator
@@ -28,7 +30,7 @@ import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
 
-class MaaApplication : Application() {
+class MaaApplication : Application(), AppFunctionConfiguration.Provider {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -81,4 +83,12 @@ class MaaApplication : Application() {
             scheduleAlarmManager.rescheduleAll(scheduleRepository.strategies.value)
         }
     }
+
+    // getter 惰性求值：真正被系统取用时 Koin 早已 startKoin 完毕，不存在时序问题
+    override val appFunctionConfiguration: AppFunctionConfiguration
+        get() = AppFunctionConfiguration.Builder()
+            .addEnclosingClassFactory(MaaFunctions::class.java) {
+                org.koin.core.context.GlobalContext.get().get<MaaFunctions>()
+            }
+            .build()
 }
