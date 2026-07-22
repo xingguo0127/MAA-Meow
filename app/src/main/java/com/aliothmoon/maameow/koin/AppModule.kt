@@ -1,5 +1,6 @@
 package com.aliothmoon.maameow.koin
 
+import com.aliothmoon.maameow.appfunctions.MaaFunctions
 import com.aliothmoon.maameow.data.achievement.AchievementRepository
 import com.aliothmoon.maameow.data.api.CopilotApiService
 import com.aliothmoon.maameow.data.api.ETagCacheManager
@@ -26,7 +27,6 @@ import com.aliothmoon.maameow.data.notification.provider.QmsgProvider
 import com.aliothmoon.maameow.data.notification.provider.ServerChanProvider
 import com.aliothmoon.maameow.data.notification.provider.SmtpProvider
 import com.aliothmoon.maameow.data.notification.provider.TelegramProvider
-import com.aliothmoon.maameow.appfunctions.MaaFunctions
 import com.aliothmoon.maameow.data.preferences.AppSettingsManager
 import com.aliothmoon.maameow.data.preferences.ConfigBackupManager
 import com.aliothmoon.maameow.data.preferences.TaskChainState

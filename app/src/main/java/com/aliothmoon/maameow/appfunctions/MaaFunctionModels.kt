@@ -35,6 +35,6 @@ data class MaaStatus(
     val totalTasks: Int,
     /** 已完成节点数 */
     val completedTasks: Int,
-    /** 正在执行的节点，无则空串 */
+    /** 正在执行的任务类型标识（如 Fight/Recruit 等英文 token），无则空串 */
     val currentTask: String,
 )

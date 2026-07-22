@@ -57,29 +57,33 @@ class MaaFunctions(
             return LaunchResult(false, "EMPTY_CHAIN", "配置「${profile.name}」没有启用的任务节点")
         }
 
-        return when (val decision = prepareTaskStart(chain, TaskStartContext(TaskStartMode.SCHEDULED))) {
-            is TaskStartDecision.Ready -> {
-                val result = composition.start(
-                    tasks = decision.plan.params,
-                    clientType = decision.plan.clientType,
-                    isScheduled = true,
-                )
-                if (result is MaaCompositionService.StartResult.Success) {
-                    LaunchResult(true, "STARTED", "已开始执行「${profile.name}」")
-                } else {
-                    // MaaCore 启动失败（资源/连接/实例初始化等）。三码契约里没有专门的失败码，
-                    // 归入 BLOCKED——语义上都是「请求没能真正跑起来」。
-                    LaunchResult(false, "BLOCKED", "MAA 核心启动失败：$result")
+        return try {
+            when (val decision = prepareTaskStart(chain, TaskStartContext(TaskStartMode.SCHEDULED))) {
+                is TaskStartDecision.Ready -> {
+                    val result = composition.start(
+                        tasks = decision.plan.params,
+                        clientType = decision.plan.clientType,
+                        isScheduled = true,
+                    )
+                    if (result is MaaCompositionService.StartResult.Success) {
+                        LaunchResult(true, "STARTED", "已开始执行「${profile.name}」")
+                    } else {
+                        // MaaCore 启动失败（资源/连接/实例初始化等）。三码契约里没有专门的失败码，
+                        // 归入 BLOCKED——语义上都是「请求没能真正跑起来」。
+                        LaunchResult(false, "BLOCKED", "MAA 核心启动失败：$result")
+                    }
                 }
+
+                is TaskStartDecision.Blocked ->
+                    LaunchResult(false, "BLOCKED", "任务被前置检查拦截：${decision.reason}")
+
+                // SCHEDULED 模式下闸门只产出 Ready/Blocked，RequiresConfirmation 仅 MANUAL 模式触发
+                // （见 ForegroundScheduleStarter 同名注释）。AppFunction 入口没有交互式确认通道，兜底按 BLOCKED 处理。
+                is TaskStartDecision.RequiresConfirmation ->
+                    LaunchResult(false, "BLOCKED", "任务需要用户确认，AppFunction 入口不支持交互式确认")
             }
-
-            is TaskStartDecision.Blocked ->
-                LaunchResult(false, "BLOCKED", "任务被前置检查拦截：${decision.reason}")
-
-            // SCHEDULED 模式下闸门只产出 Ready/Blocked，RequiresConfirmation 仅 MANUAL 模式触发
-            // （见 ForegroundScheduleStarter 同名注释）。AppFunction 入口没有交互式确认通道，兜底按 BLOCKED 处理。
-            is TaskStartDecision.RequiresConfirmation ->
-                LaunchResult(false, "BLOCKED", "任务需要用户确认，AppFunction 入口不支持交互式确认")
+        } catch (e: Exception) {
+            LaunchResult(false, "BLOCKED", "启动异常：${e.message}")
         }
     }
 
