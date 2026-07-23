@@ -61,7 +61,9 @@ class GameViewServer(private val composition: MaaCompositionService) {
 
     private fun serveLoop() {
         val server = try {
-            ServerSocket(PORT, 8, InetAddress.getLoopbackAddress())
+            // 显式 bind IPv4 127.0.0.1:getLoopbackAddress() 在部分设备返回 ::1,只监听 IPv6,
+            // floai 侧连 IPv4 127.0.0.1 会 ConnectException。约定用 IPv4(与 8830 分身一致)。
+            ServerSocket(PORT, 8, InetAddress.getByName("127.0.0.1"))
         } catch (e: Exception) {
             Log.e(TAG, "bind :$PORT failed", e); return
         }
