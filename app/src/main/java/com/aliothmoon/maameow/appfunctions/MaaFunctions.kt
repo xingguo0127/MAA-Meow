@@ -81,7 +81,11 @@ class MaaFunctions(
                         isScheduled = true,
                     )
                     if (result is MaaCompositionService.StartResult.Success) {
-                        LaunchResult(true, "STARTED", "已开始执行「${profile.name}」")
+                        // 后台模式带回虚拟屏 displayId，供 floai push live_display_card；前台模式无屏为 -1
+                        LaunchResult(
+                            true, "STARTED", "已开始执行「${profile.name}」",
+                            displayId = composition.activeVirtualDisplayId.value
+                        )
                     } else {
                         // MaaCore 启动失败（资源/连接/实例初始化等）。三码契约里没有专门的失败码，
                         // 归入 BLOCKED——语义上都是「请求没能真正跑起来」。

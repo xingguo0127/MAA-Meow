@@ -22,6 +22,9 @@ data class LaunchResult(
     val code: String,
     /** 人类可读说明 */
     val message: String,
+    /** 后台虚拟屏 displayId（-1=无，仅 STARTED 且后台模式有值）。
+     *  供 floai 拿去 push live_display_card 实时屏卡（fork 专属）。 */
+    val displayId: Int = -1,
 )
 
 /** MAA 当前运行状态 */
