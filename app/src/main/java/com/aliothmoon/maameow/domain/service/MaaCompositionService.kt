@@ -72,7 +72,8 @@ class MaaCompositionService(
     val displayResolution: StateFlow<DefaultDisplayConfig.Resolution> =
         _displayResolution.asStateFlow()
 
-    /** 当前游戏虚拟屏 displayId（-1=无，仅 BACKGROUND 模式有值）。GameViewServer /displays 的数据源（fork 专属）。 */
+    /** 当前游戏虚拟屏 displayId（-1=无，仅 BACKGROUND 模式有值）的主进程内部记账（fork 专属）。
+     *  注:GameViewServer 挪到 :service 后改直读 VirtualDisplayManager.getDisplayId(),不再依赖本 flow。 */
     private val _activeVirtualDisplayId = MutableStateFlow(-1)
     val activeVirtualDisplayId: StateFlow<Int> = _activeVirtualDisplayId.asStateFlow()
 

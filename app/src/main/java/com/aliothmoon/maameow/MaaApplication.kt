@@ -43,7 +43,6 @@ class MaaApplication : Application(), AppFunctionConfiguration.Provider {
     private val treeHolder: LogTreeHolder by inject()
     private val scheduleRepository: ScheduleStrategyRepository by inject()
     private val scheduleAlarmManager: ScheduleAlarmManager by inject()
-    private val gameViewServer: com.aliothmoon.maameow.gameview.GameViewServer by inject()
     override fun onCreate() {
         super.onCreate()
         val app = this
@@ -65,7 +64,8 @@ class MaaApplication : Application(), AppFunctionConfiguration.Provider {
         overlayController.setup()
         unifiedStateDispatcher.start()
         gameMuteCoordinator.startAutoRestore()
-        runCatching { gameViewServer.start() }   // FlowOS 对话内游戏虚拟屏(fork 专属)
+        // 注:GameViewServer 已挪到 :service/:root_service 远端进程(RemoteServiceImpl 持有),
+        // 主进程不再启动 —— 避免退后台被 cached-app-freezer 冻结致对话内 8831 预览失效。
         cleanCachedUpdateApks()
         doSyncScheduleAlarms()
     }

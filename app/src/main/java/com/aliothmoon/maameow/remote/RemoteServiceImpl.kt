@@ -9,6 +9,7 @@ import com.aliothmoon.maameow.RemoteService
 import com.aliothmoon.maameow.bridge.NativeBridgeLib
 import com.aliothmoon.maameow.constant.DefaultDisplayConfig
 import com.aliothmoon.maameow.constant.DisplayMode
+import com.aliothmoon.maameow.gameview.GameViewServer
 import com.aliothmoon.maameow.maa.InputControlUtils
 import android.content.Intent
 import com.aliothmoon.maameow.remote.internal.ActivityUtils
@@ -63,12 +64,17 @@ class RemoteServiceImpl : RemoteService.Stub() {
     private val destroyed = AtomicBoolean(false)
     private var setup = false
 
+    // FlowOS 对话内游戏虚拟屏服务端(fork 专属):跑在本远端进程,不被 cached-app-freezer 冻结
+    private val gameViewServer = GameViewServer()
+
     init {
         Workarounds.apply()
         startHeartbeatWatchdog()
         RemoteBootTrace.mark("CTOR_BEFORE_MAA_SERVICE")
         Ln.i("$TAG: RemoteServiceImpl init, version: ${MaaCoreManager.maaService.GetVersion()}")
         RemoteBootTrace.mark("CTOR_AFTER_MAA_SERVICE")
+        runCatching { gameViewServer.start() }
+            .onFailure { Ln.e("$TAG: GameViewServer start failed: ${it.message}") }
         RemoteBootTrace.mark("CTOR_DONE")
     }
 
@@ -77,6 +83,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
             return
         }
         Ln.i("$TAG: destroy()")
+        runCatching { gameViewServer.stop() }
         InputControlUtils.setTouchCallback(null)
         performEmergencyCleanup()
         exitProcess(0)

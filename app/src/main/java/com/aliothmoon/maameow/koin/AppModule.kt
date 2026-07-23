@@ -1,7 +1,6 @@
 package com.aliothmoon.maameow.koin
 
 import com.aliothmoon.maameow.appfunctions.MaaFunctions
-import com.aliothmoon.maameow.gameview.GameViewServer
 import com.aliothmoon.maameow.data.achievement.AchievementRepository
 import com.aliothmoon.maameow.data.api.CopilotApiService
 import com.aliothmoon.maameow.data.api.ETagCacheManager
@@ -191,6 +190,6 @@ val appModule = module {
 
     // FlowOS App Functions（fork 专属）
     singleOf(::MaaFunctions)
-    // FlowOS 对话内游戏虚拟屏服务端（fork 专属）
-    singleOf(::GameViewServer)
+    // 注:GameViewServer(对话内游戏虚拟屏服务端)已挪到 :service/:root_service 远端进程,
+    // 由 RemoteServiceImpl 直接持有 —— 避免主进程退后台被 cached-app-freezer 冻结致 8831 失效。
 }

@@ -99,6 +99,10 @@ object VirtualDisplayManager {
 
     fun getDisplayId(): Int = displayId.get()
 
+    /** 当前虚拟屏配置分辨率(w/h/dpi)。GameViewServer /size 数据源(fork 专属)——
+     *  与 setupNativeCapturer(cfg.width, cfg.height) 一致,故等于帧缓冲尺寸,可直接用于坐标映射。 */
+    fun getResolution(): DisplayConfig = config.get()
+
     private fun startInternal(): Int {
         try {
             val cfg = config.get()
