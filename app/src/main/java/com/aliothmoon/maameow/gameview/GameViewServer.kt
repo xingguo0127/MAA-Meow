@@ -1,7 +1,8 @@
 package com.aliothmoon.maameow.gameview
 
 import android.graphics.Bitmap
-import android.graphics.PixelFormat
+import android.graphics.ImageFormat
+import android.hardware.HardwareBuffer
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
@@ -151,22 +152,28 @@ class GameViewServer(private val composition: MaaCompositionService) {
         val r = composition.displayResolution.value
         val t = HandlerThread("gameview-frames").apply { start() }
         readerThread = t
-        val ir = ImageReader.newInstance(r.width, r.height, PixelFormat.RGBA_8888, 3)
+        // PRIVATE + HardwareBuffer 路径:native 生产端会自设像素格式(实测 10-bit,按 RGBA_8888 读出来
+        // 颜色全乱),wrapHardwareBuffer 让 GPU 按真实格式转成标准 Bitmap,格式无关。
+        val ir = ImageReader.newInstance(
+            r.width, r.height, ImageFormat.PRIVATE, 3, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE
+        )
         ir.setOnImageAvailableListener({ rd ->
             val img = rd.acquireLatestImage() ?: return@setOnImageAvailableListener
             try {
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastFrameMs < FRAME_MIN_INTERVAL_MS) return@setOnImageAvailableListener   // 节流，finally 保证 close
-                val plane = img.planes[0]
-                val w = img.width; val h = img.height
-                val rowPx = plane.rowStride / plane.pixelStride
-                val bmp = Bitmap.createBitmap(rowPx, h, Bitmap.Config.ARGB_8888)
-                bmp.copyPixelsFromBuffer(plane.buffer)
-                val cropped = if (rowPx != w) Bitmap.createBitmap(bmp, 0, 0, w, h) else bmp
-                val bos = ByteArrayOutputStream()
-                cropped.compress(Bitmap.CompressFormat.PNG, 100, bos)
-                latestPng = bos.toByteArray()
-                lastFrameMs = now
+                val hb = img.hardwareBuffer ?: return@setOnImageAvailableListener
+                val sw = try {
+                    Bitmap.wrapHardwareBuffer(hb, null)?.copy(Bitmap.Config.ARGB_8888, false)
+                } finally {
+                    hb.close()
+                }
+                if (sw != null) {
+                    val bos = ByteArrayOutputStream()
+                    sw.compress(Bitmap.CompressFormat.PNG, 100, bos)
+                    latestPng = bos.toByteArray()
+                    lastFrameMs = now
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "frame: ${e.message}")
             } finally {
