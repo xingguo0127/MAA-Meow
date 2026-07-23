@@ -72,6 +72,10 @@ class MaaCompositionService(
     val displayResolution: StateFlow<DefaultDisplayConfig.Resolution> =
         _displayResolution.asStateFlow()
 
+    /** 当前游戏虚拟屏 displayId（-1=无，仅 BACKGROUND 模式有值）。GameViewServer /displays 的数据源（fork 专属）。 */
+    private val _activeVirtualDisplayId = MutableStateFlow(-1)
+    val activeVirtualDisplayId: StateFlow<Int> = _activeVirtualDisplayId.asStateFlow()
+
     override fun reportRunState(state: MaaExecutionState) {
         // STOPPING 期间，回调不主动设 IDLE — 由 finishStop() 统一处理
         if (_state.value == MaaExecutionState.STOPPING && state == MaaExecutionState.IDLE) {
@@ -342,6 +346,7 @@ class MaaCompositionService(
                         "VIRTUAL_DISPLAY_ERROR",
                         StartResult.ConnectionError(StartResult.ConnectionError.ConnectPhase.VIRTUAL_DISPLAY)
                     )
+                _activeVirtualDisplayId.value = displayId
                 buildConnectConfig(r.width, r.height, displayId)
             }
         }
@@ -531,6 +536,7 @@ class MaaCompositionService(
     suspend fun stopVirtualDisplay() {
         try {
             appWatchdog.stopWatching()
+            _activeVirtualDisplayId.value = -1
             _displayResolution.value = defaultResolution
             withContext(Dispatchers.IO) {
                 val service = RemoteServiceManager.getInstanceOrNull()
