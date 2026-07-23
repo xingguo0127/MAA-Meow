@@ -12,6 +12,7 @@ import com.aliothmoon.maameow.domain.usecase.TaskStartMode
 import com.aliothmoon.maameow.maa.callback.TaskChainStatusTracker
 import com.aliothmoon.maameow.maa.callback.TaskRunStatus
 import kotlinx.coroutines.flow.first
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** FlowOS 对话集成入口：暴露给系统 agent 的三个函数（fork 专属，diff 独立成包便于跟上游 rebase） */
 class MaaFunctions(
@@ -20,6 +21,9 @@ class MaaFunctions(
     private val composition: MaaCompositionService,
     private val statusTracker: TaskChainStatusTracker,
 ) {
+    // 对齐 ForegroundScheduleStarter.executing：RUNNING/STARTING 状态检查只能挡住已在跑的任务，
+    // 挡不住两个并发调用同时通过检查（状态尚未扳到 STARTING 的窗口期）导致双启动/串 profile。
+    private val executing = AtomicBoolean(false)
 
     /** 列出全部任务配置（Profile） */
     @AppFunction
@@ -36,6 +40,17 @@ class MaaFunctions(
      */
     @AppFunction
     suspend fun launchProfile(context: AppFunctionContext, profileId: String): LaunchResult {
+        if (!executing.compareAndSet(false, true)) {
+            return LaunchResult(false, "BUSY", "另一个启动请求正在处理中")
+        }
+        try {
+            return launchProfileLocked(profileId)
+        } finally {
+            executing.set(false)
+        }
+    }
+
+    private suspend fun launchProfileLocked(profileId: String): LaunchResult {
         // 忙碌判定对齐 ForegroundScheduleStarter.executeSilentStart：只有 RUNNING/STARTING 算占用，
         // STOPPING/ERROR 不拦截（executeStart 内部会把状态直接扳到 STARTING）。
         val runState = composition.state.value
