@@ -163,7 +163,9 @@ class GameViewServer {
     // ── 帧:进程内直读最新帧 buffer → PNG ──
 
     private fun framePng(): ByteArray? = synchronized(frameLock) {
-        if (VirtualDisplayManager.getDisplayId() < 0) return null   // 无活动虚拟屏
+        // VD 已回收(displayId<0):不返 null,而是返回回收前抓的「最终帧」,让 floai 的 live_display_card
+        // 即便在回收之后才组合也能定格最后一帧(而非深色底=黑屏)。无最终帧才 null(如从未起过屏)。
+        if (VirtualDisplayManager.getDisplayId() < 0) return VirtualDisplayManager.getFinalFramePng()
         val fc = NativeBridgeLib.getFrameCount()
         val now = SystemClock.elapsedRealtime()
         val cached = latestPng

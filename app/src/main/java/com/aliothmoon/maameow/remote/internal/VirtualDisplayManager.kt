@@ -1,5 +1,6 @@
 package com.aliothmoon.maameow.remote.internal
 
+import android.graphics.Bitmap
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Build
@@ -10,6 +11,7 @@ import com.aliothmoon.maameow.constant.DefaultDisplayConfig
 import com.aliothmoon.maameow.constant.DefaultDisplayConfig.VD_NAME
 import com.aliothmoon.maameow.third.Ln
 import com.aliothmoon.maameow.third.wrappers.ServiceManager
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -54,6 +56,17 @@ object VirtualDisplayManager {
 
     private val monitorSurface = AtomicReference<Surface?>()
 
+    /**
+     * 回收前抓下的「最终帧」PNG(fork 专属)。VD 释放后 arknights Activity 被销毁、帧缓冲变黑,
+     * floai 的 live_display_card 若在回收后才组合就抓不到画面(→ 卡显深色底=「黑屏」)。这里在 [stop]
+     * 释放 VD 前主动抓一帧留存,[GameViewServer] 在 VD 已无(displayId<0)时用它兜底出帧,让卡片定格最后一帧。
+     * 新任务 [startInternal] 时清掉,不串上一局。
+     */
+    private val finalFramePng = AtomicReference<ByteArray?>()
+
+    /** VD 已回收后 GameViewServer /frame 的兜底数据源:最后一帧 PNG(无则 null)。 */
+    fun getFinalFramePng(): ByteArray? = finalFramePng.get()
+
     fun setMonitorSurface(surface: Surface?) {
         val old = monitorSurface.getAndSet(surface)
         if (old != null && old != surface) {
@@ -75,9 +88,22 @@ object VirtualDisplayManager {
         if (!state.compareAndSet(STATE_CAPTURING, STATE_IDLE)) {
             return
         }
+        captureFinalFrame()   // 释放 VD 前先抓最后一帧,供回收后 floai 卡定格(见 finalFramePng)
         releaseResources()
         monitorSurface.getAndSet(null)?.release()
         Ln.i("VirtualDisplayManager stopped")
+    }
+
+    /** 释放前抓当前帧缓冲编码成 PNG 存入 [finalFramePng];失败不阻断回收(顶多没有定格帧)。 */
+    private fun captureFinalFrame() {
+        runCatching {
+            val bmp: Bitmap = NativeBridgeLib.getFrameBufferBitmap() ?: return
+            val bos = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, bos)
+            bmp.recycle()
+            finalFramePng.set(bos.toByteArray())
+            Ln.i("VD final frame captured: ${bos.size()} B (freeze-frame for floai after reclaim)")
+        }.onFailure { Ln.w("captureFinalFrame failed: ${it.message}") }
     }
 
     fun restart() {
@@ -105,6 +131,7 @@ object VirtualDisplayManager {
 
     private fun startInternal(): Int {
         try {
+            finalFramePng.set(null)   // 新一局:清掉上一局的定格帧,别串画面
             val cfg = config.get()
             val surface = NativeBridgeLib.setupNativeCapturer(cfg.width, cfg.height)
             createVirtualDisplay(surface, cfg)

@@ -45,6 +45,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.koin.java.KoinJavaComponent.inject
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class MaaCompositionService(
@@ -77,6 +78,22 @@ class MaaCompositionService(
     private val _activeVirtualDisplayId = MutableStateFlow(-1)
     val activeVirtualDisplayId: StateFlow<Int> = _activeVirtualDisplayId.asStateFlow()
 
+    /**
+     * 无头会话(AppFunction launchProfile)自动回收后台游戏虚拟屏的武装标志(fork 专属)。
+     * agent 无头拉起的会话没有 UI owner 回收虚拟屏,任务自然打完后游戏会留在无 vsync 节流的
+     * 虚拟屏上全速空转烧 CPU;武装后由 [onAllTasksCompleted] 兜底回收。app UI / 定时器拉起的
+     * 会话不武装(各自 owner 负责回收),floai 接管(TaskChainStopped)也不触发(见 onAllTasksCompleted)。
+     */
+    private val autoReclaimArmed = AtomicBoolean(false)
+
+    /** 完成到回收之间的宽限:留一个 floai live_display_card 轮询周期抓到干净的最终帧再回收。 */
+    private val autoReclaimGraceMs = 3_000L
+
+    /** [MaaFunctions.launchProfile] 后台模式(displayId>=0)成功启动后调:武装自动回收。 */
+    fun armAutoReclaimOnCompletion() {
+        autoReclaimArmed.set(true)
+    }
+
     override fun reportRunState(state: MaaExecutionState) {
         // STOPPING 期间，回调不主动设 IDLE — 由 finishStop() 统一处理
         if (_state.value == MaaExecutionState.STOPPING && state == MaaExecutionState.IDLE) {
@@ -95,6 +112,24 @@ class MaaCompositionService(
                 TaskExecutionService.stop(context)
 
             MaaExecutionState.STOPPING, MaaExecutionState.RUNNING -> {}
+        }
+    }
+
+    /**
+     * 所有任务自然打完(区别于用户/floai 接管的 TaskChainStopped)。先照常置 IDLE,
+     * 若本会话武装了自动回收(无头 launchProfile 拉起)——宽限一个轮询周期(让 floai 抓到最终帧),
+     * 复核仍处 IDLE(宽限期没被新任务顶掉)后回收后台游戏虚拟屏,避免游戏空跑烧 CPU。
+     */
+    override fun onAllTasksCompleted() {
+        reportRunState(MaaExecutionState.IDLE)
+        if (!autoReclaimArmed.get()) return
+        scope.launch {
+            delay(autoReclaimGraceMs)
+            // 宽限期内若又起了新任务(state 变 STARTING/RUNNING)或已被别处回收/解除,则跳过
+            if (!autoReclaimArmed.getAndSet(false)) return@launch
+            if (_state.value != MaaExecutionState.IDLE) return@launch
+            Timber.i("Auto-reclaim: 无头会话任务已完成,回收后台游戏虚拟屏")
+            stopVirtualDisplay()
         }
     }
 
@@ -398,6 +433,9 @@ class MaaCompositionService(
         isScheduled: Boolean = false,
         onSessionStarted: (suspend () -> Unit)? = null,
     ): StartResult {
+        // 任何新启动先解除上一会话可能遗留的武装,防陈旧 arm 泄漏到本次(尤其后续 app UI 会话)。
+        // 无头 launchProfile 会在 start() 返回成功后重新 arm。
+        autoReclaimArmed.set(false)
         setRunState(MaaExecutionState.STARTING)
         sessionLogger.startSession(tasks.map { it.type.value })
         subTaskHandler.resetSessionState()
@@ -535,6 +573,8 @@ class MaaCompositionService(
     }
 
     suspend fun stopVirtualDisplay() {
+        // 显式回收即接管了虚拟屏归宿,解除自动回收武装,避免宽限中的回收协程重复触发。
+        autoReclaimArmed.set(false)
         try {
             appWatchdog.stopWatching()
             _activeVirtualDisplayId.value = -1

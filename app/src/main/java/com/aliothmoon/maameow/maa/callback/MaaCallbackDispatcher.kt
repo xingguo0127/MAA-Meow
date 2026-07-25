@@ -84,7 +84,9 @@ class MaaCallbackDispatcher(
     }
 
     private fun handleAllTasksCompleted(details: JSONObject?) {
-        stateHolder.reportRunState(MaaExecutionState.IDLE)
+        // 自然完成走 onAllTasksCompleted(而非通用 reportRunState),让 stateHolder 能把
+        // 「自然打完」与「用户/接管 Stop」区分开——仅前者触发无头会话的虚拟屏自动回收。
+        stateHolder.onAllTasksCompleted()
         details?.let { taskChainHandler.handle(AsstMsg.AllTasksCompleted, it) }
         sessionLogger.endSession("COMPLETED")
     }

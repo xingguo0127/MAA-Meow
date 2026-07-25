@@ -82,9 +82,13 @@ class MaaFunctions(
                     )
                     if (result is MaaCompositionService.StartResult.Success) {
                         // 后台模式带回虚拟屏 displayId，供 floai push live_display_card；前台模式无屏为 -1
+                        val displayId = composition.activeVirtualDisplayId.value
+                        // 无头(AppFunction)会话没有 UI owner 回收虚拟屏：武装自动回收，任务自然打完后
+                        // 兜底释放后台游戏虚拟屏，避免明日方舟空跑烧 CPU（见 onAllTasksCompleted）。
+                        if (displayId >= 0) composition.armAutoReclaimOnCompletion()
                         LaunchResult(
                             true, "STARTED", "已开始执行「${profile.name}」",
-                            displayId = composition.activeVirtualDisplayId.value
+                            displayId = displayId
                         )
                     } else {
                         // MaaCore 启动失败（资源/连接/实例初始化等）。三码契约里没有专门的失败码，
